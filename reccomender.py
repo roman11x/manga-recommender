@@ -1,0 +1,1 @@
+# scoring and ranking (pure functions, no classes)

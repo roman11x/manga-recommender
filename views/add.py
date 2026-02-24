@@ -1,0 +1,1 @@
+# AddView; search and add manga/anime manually

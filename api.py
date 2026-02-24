@@ -1,0 +1,1 @@
+# JikanClient class; all HTTP calls; rate limiting

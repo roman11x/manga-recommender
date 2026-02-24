@@ -1,0 +1,15 @@
+data/
+__pycache__/
+*.pyc
+*.spec
+dist/
+build/
+.env
+.venv/
+gui_guide.docx
+project_instructions.docx
+python_foundations(1).docx
+project_phases.docx
+.~lock.project_instructions.docx#
+.~lock.project_phases.docx#
+.~lock.python_foundations(1).docx#
