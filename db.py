@@ -82,3 +82,31 @@ class Database:
         if row is None:
             return None
         return dict(row)
+
+    def update_status(self, mal_id, media_type, status):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        UPDATE media SET status = ? WHERE mal_id =? and media_type = ?''', (status, mal_id, media_type))
+        self.con.commit()
+
+    def update_liked(self, mal_id, media_type, liked):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        UPDATE media SET liked = ? WHERE mal_id =? and media_type = ?''', (liked, mal_id, media_type))
+        self.con.commit()
+    # Does the user have a taste so that we can look for recommendations
+    def has_consumed_liked_entries(self) -> bool:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT COUNT(*) FROM media WHERE liked = 1 AND status = 'consumed' ''')
+        return cursor.fetchone()[0] > 0
+
+    def get_tag_weights(self, media_type) -> dict[str, int]:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT tags.tag, COUNT(*) FROM TAGS  
+        JOIN media ON tags.mal_id = media.mal_id AND tags.media_type = media.media_type 
+        WHERE status = 'consumed' AND liked = 1 AND media.media_type = ?
+        GROUP BY tags.tag''', (media_type,))
+        # Extract the tag (index 0) and the count (index 1) to build the dictionary
+        return {row[0] : row[1] for row in cursor.fetchall()}
