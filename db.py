@@ -110,3 +110,110 @@ class Database:
         GROUP BY tags.tag''', (media_type,))
         # Extract the tag (index 0) and the count (index 1) to build the dictionary
         return {row[0] : row[1] for row in cursor.fetchall()}
+
+    # get consumed media for filtering returns [(mal_id,mediatype)[
+    def get_library_ids (self, media_type) -> set[tuple]:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT mal_id, media_type FROM media WHERE status != 'blacklisted' AND media_type = ? ''', (media_type,))
+        return {(row[0], row[1]) for row in cursor.fetchall()}
+
+    # get blacklisted media for filtering returns [(mal_id,mediatype)]
+    def get_blacklist_ids(self, media_type) -> set[tuple]:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT mal_id, media_type FROM media WHERE status = 'blacklisted' AND media_type = ? ''', (media_type,))
+        return {(row[0], row[1]) for row in cursor.fetchall()}
+
+    def add_blacklisted_tag(self,tag,media_type):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        INSERT INTO blacklisted_tags(tag,media_type) values (?,?)''', (tag,media_type))
+        self.con.commit()
+
+    def remove_blacklisted_tag(self,tag,media_type):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        DELETE FROM blacklisted_tags WHERE tag = ? AND media_type = ?''', (tag,media_type))
+        self.con.commit()
+
+    def get_blacklisted_tags(self,media_type) -> set[str]:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT tag FROM blacklisted_tags WHERE media_type = ? OR media_type ='both' ''', (media_type,))
+        return {row[0] for row in cursor.fetchall()}
+
+    def save_recommendation(self, item_dict):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        INSERT OR IGNORE INTO recommendations(mal_id,media_type,title,score, state, cover_url,synopsis,mal_score) 
+        VALUES (?,?,?,?,?,?,?,?) '''
+                       ,(item_dict.get("mal_id"), item_dict.get("media_type"), item_dict.get("title"), item_dict.get("score"), "pending", item_dict.get("cover_url"), item_dict.get("synopsis"), item_dict.get("mal_score")))
+
+        for tag in item_dict['tags']:
+            cursor.execute('''
+            INSERT OR IGNORE INTO recommendation_tags(mal_id,media_type,tag, matched) VALUES (?,?,?,?)''',
+                           (item_dict.get("mal_id"), item_dict.get("media_type"), tag['name'], tag['matched']))
+
+        self.con.commit()
+
+    def get_pending_recommendations(self, media_type = None) -> list[dict]:
+        query = "SELECT * FROM recommendations WHERE state = 'pending'"
+        params = []
+        if media_type is not None:
+            query += " AND media_type = ?"
+            params.append(media_type)
+        cursor = self.con.cursor()
+        cursor.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_saved_recommendations(self, media_type = None) -> list[dict]:
+        query = "SELECT * FROM recommendations WHERE state = 'saved'"
+        params = []
+        if media_type is not None:
+            query += " AND media_type = ?"
+            params.append(media_type)
+        cursor = self.con.cursor()
+        cursor.execute(query, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def move_recommendation_to_saved(self, mal_id, media_type):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        UPDATE recommendations SET state = 'saved' WHERE mal_id = ? and media_type = ?''', (mal_id, media_type))
+        self.con.commit()
+    def remove_recommendation(self, mal_id, media_type):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        DELETE FROM recommendations WHERE mal_id = ? and media_type = ?''', (mal_id, media_type))
+        cursor.execute('''
+        DELETE FROM recommendation_tags WHERE mal_id = ? and media_type = ?''', (mal_id, media_type))
+        self.con.commit()
+    def clear_pending_recommendations(self, media_type):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        DELETE FROM recommendations WHERE state = 'pending' AND media_type = ?  ''', (media_type,))
+        self.con.commit()
+
+    def get_setting(self, key) -> str | None:
+        cursor = self.con.cursor()
+        cursor.execute('''
+        SELECT value FROM settings WHERE key = ?''', (key,))
+        row = cursor.fetchone()
+        if row is  None:
+            return None
+        return row[0]
+
+    def set_setting(self, key, value):
+        cursor = self.con.cursor()
+        cursor.execute('''
+        INSERT OR REPLACE INTO settings(key, value) VALUES (?,?)''', (key, value))
+        self.con.commit()
+
+    def get_active_media_types(self) -> list[str]:
+        value = self.get_setting('active_media_types')
+        if value is None:
+            return []
+        return value.split(',')
+
+
