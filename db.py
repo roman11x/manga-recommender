@@ -31,7 +31,7 @@ class Database:
                 score REAL,
                 'state' text NOT NULL,
                 cover_url TEXT,
-                synopsis TEXT NOT NULL,
+                synopsis TEXT,
                 mal_score REAL,
                 generated_at TEXT DEFAULT (datetime('now')),
                     PRIMARY KEY (mal_id, media_type)
@@ -61,6 +61,12 @@ class Database:
         for tag in tags:
             cursor.execute('''
             INSERT OR IGNORE INTO tags(mal_id,media_type,tag) values (?,?,?)''', (mal_id,media_type,tag))
+        self.con.commit()
+
+    def delete_media(self, mal_id, media_type):
+        cursor = self.con.cursor()
+        cursor.execute("DELETE FROM media WHERE mal_id = ? AND media_type = ?", (mal_id, media_type))
+        cursor.execute("DELETE FROM tags WHERE mal_id = ? AND media_type = ?", (mal_id, media_type))
         self.con.commit()
 
     def get_all_media(self, media_type = None) -> list[dict] :

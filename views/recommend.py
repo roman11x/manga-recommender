@@ -2,6 +2,7 @@
 import threading
 import customtkinter as ctk
 import theme
+from utils import tag_pill
 
 
 FAKE_CARD = {
@@ -17,15 +18,6 @@ FAKE_CARD = {
 }
 
 
-def _tag_pill(parent, text):
-    frame = ctk.CTkFrame(parent, fg_color=theme.SURFACE1, corner_radius=theme.R_SM)
-    frame.pack(side="left", padx=2, pady=2)
-    ctk.CTkLabel(
-        frame, text=text,
-        fg_color="transparent",
-        text_color=theme.SUBTEXT,
-        font=ctk.CTkFont(size=12),
-    ).pack(padx=9, pady=4)
 
 
 class RecommendView(ctk.CTkFrame):
@@ -117,7 +109,7 @@ class RecommendView(ctk.CTkFrame):
         tags_row = ctk.CTkFrame(info, fg_color="transparent")
         tags_row.pack(fill="x", pady=(0, 12))
         for tag in FAKE_CARD["tags"]:
-            _tag_pill(tags_row, tag)
+            tag_pill(tags_row, tag)
 
         synopsis_box = ctk.CTkTextbox(
             info,

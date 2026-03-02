@@ -3,11 +3,7 @@ import customtkinter as ctk
 import theme
 
 
-FAKE_ENTRIES = [
-    {"title": "Berserk",         "media_type": "manga", "status": "consumed",        "liked": 1},
-    {"title": "Attack on Titan", "media_type": "anime", "status": "consuming",       "liked": None},
-    {"title": "Vinland Saga",    "media_type": "manga", "status": "plan_to_consume", "liked": None},
-]
+
 
 STATUS_DISPLAY = {
     "consumed":        ("Completed",     theme.GREEN),
@@ -72,7 +68,7 @@ class LibraryView(ctk.CTkFrame):
         count_lbl.pack(fill="x", padx=20, pady=(12, 0))
         ctk.CTkLabel(
             count_lbl,
-            text=f"// {len(FAKE_ENTRIES)} entries",
+            text=f"// {len(self.app.db.get_all_media())} entries",
             font=ctk.CTkFont(size=12),
             text_color=theme.MUTED,
         ).pack(side="left")
@@ -92,11 +88,13 @@ class LibraryView(ctk.CTkFrame):
         self._render_entries()
 
     def _render_entries(self):
+        if not hasattr(self, "_open_actions"):
+            self._open_actions = None
         for w in self._scroll.winfo_children():
             w.destroy()
 
         filtered = [
-            e for e in FAKE_ENTRIES
+            e for e in self.app.db.get_all_media()
             if self._filter == "All" or e["media_type"] == self._filter.lower()
         ]
         if not filtered:
@@ -112,8 +110,12 @@ class LibraryView(ctk.CTkFrame):
                 fg_color=theme.SURFACE0,
                 corner_radius=theme.R_MD,
                 border_width=1, border_color=theme.OVERLAY,
+                cursor="hand2",
             )
             row.pack(fill="x", pady=5)
+            if hasattr(self, "_open_actions") and self._open_actions == entry["mal_id"]:
+                self._render_actions(self._scroll, entry)
+            row.bind("<Button-1>", lambda e, en=entry: self._toggle_actions(en))
 
             # Media-type badge
             type_color = TYPE_COLOR.get(entry["media_type"], theme.SUBTEXT)
@@ -156,3 +158,62 @@ class LibraryView(ctk.CTkFrame):
                 text_color=status_color,
                 font=ctk.CTkFont(size=12),
             ).pack(padx=9, pady=3)
+
+    def _toggle_actions(self, entry):
+        # If this entry's panel is already open, close it
+        if hasattr(self, "_open_actions") and self._open_actions == entry["mal_id"]:
+            self._open_actions = None
+            self._render_entries()
+            return
+
+        self._open_actions = entry["mal_id"]
+        self._render_entries()
+
+    def _render_actions(self, parent, entry):
+        panel = ctk.CTkFrame(
+            parent,
+            fg_color=theme.MANTLE,
+            corner_radius=theme.R_MD,
+            border_width=1, border_color=theme.OVERLAY,
+        )
+        panel.pack(fill="x", pady=(0, 5))
+
+        btn_row = ctk.CTkFrame(panel, fg_color="transparent")
+        btn_row.pack(fill="x", padx=14, pady=10)
+
+        for label, status, color in [
+            ("Completed", "consumed", theme.GREEN),
+            ("In Progress", "consuming", theme.ACCENT),
+            ("Plan to Read", "plan_to_consume", theme.YELLOW),
+        ]:
+            ctk.CTkButton(
+                btn_row, text=label,
+                height=34, corner_radius=theme.R_SM,
+                fg_color="transparent",
+                border_width=1, border_color=color,
+                text_color=color,
+                hover_color=theme.SURFACE0,
+                font=ctk.CTkFont(size=12),
+                command=lambda s=status, e=entry: self._set_status(e, s),
+            ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            btn_row, text="Remove",
+            height=34, corner_radius=theme.R_SM,
+            fg_color="transparent",
+            border_width=1, border_color=theme.RED,
+            text_color=theme.RED,
+            hover_color="#3d1f25",
+            font=ctk.CTkFont(size=12),
+            command=lambda e=entry: self._remove_entry(e),
+        ).pack(side="right")
+
+    def _set_status(self, entry, status):
+        self.app.db.update_status(entry["mal_id"], entry["media_type"], status)
+        self._open_actions = None
+        self._render_entries()
+
+    def _remove_entry(self, entry):
+        self.app.db.delete_media(entry["mal_id"], entry["media_type"])
+        self._open_actions = None
+        self._render_entries()
