@@ -283,6 +283,7 @@ class OnboardingView(ctk.CTkFrame):
         import threading
         from generator import generate_recommendations
         def run():
+
             try:
                 generate_recommendations(self.app.db, self.app.client)
                 print("[GEN] done, scheduling transition")
@@ -292,6 +293,10 @@ class OnboardingView(ctk.CTkFrame):
                 import traceback
                 traceback.print_exc()
                 self.app.after(0, self._on_generation_done)
+
+        t = threading.Thread(target=run, daemon=True)
+        t.start()
+
     def _show_loading(self):
         self._clear()
         center = ctk.CTkFrame(self, fg_color="transparent")
