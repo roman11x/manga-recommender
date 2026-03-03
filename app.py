@@ -48,6 +48,8 @@ class MediaApp(ctk.CTk):
 
     def _show_feedback_dialog(self):
         if not self._feedback_queue:
+            self.lift()
+            self.focus_force()
             return
 
         rec = self._feedback_queue.pop(0)
