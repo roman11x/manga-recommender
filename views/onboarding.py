@@ -279,7 +279,37 @@ class OnboardingView(ctk.CTkFrame):
 
     def _generate(self):
         self.app.db.set_setting("active_media_types", ",".join(self.selected_types))
+        self._show_loading()
+        import threading
         from generator import generate_recommendations
-        generate_recommendations(self.app.db, self.app.client)
+        def run():
+            try:
+                generate_recommendations(self.app.db, self.app.client)
+                print("[GEN] done, scheduling transition")
+                self.app.after(0, self._on_generation_done)
+            except Exception as e:
+                print(f"[GEN] error: {e}")
+                import traceback
+                traceback.print_exc()
+                self.app.after(0, self._on_generation_done)
+    def _show_loading(self):
+        self._clear()
+        center = ctk.CTkFrame(self, fg_color="transparent")
+        center.pack(fill="both", expand=True)
+        ctk.CTkLabel(
+            center,
+            text="Generating recommendations...",
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color=theme.TEXT,
+        ).place(relx=0.5, rely=0.45, anchor="center")
+        ctk.CTkLabel(
+            center,
+            text="fetching titles from Jikan  •  this may take a moment",
+            font=ctk.CTkFont(size=14),
+            text_color=theme.MUTED,
+        ).place(relx=0.5, rely=0.52, anchor="center")
+
+    def _on_generation_done(self):
+        print("[GEN] transitioning to HomeView")
         from views.home import HomeView
         self.app.show_view(HomeView)
