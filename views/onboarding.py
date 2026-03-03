@@ -226,6 +226,7 @@ class OnboardingView(ctk.CTkFrame):
                 back_to=lambda: self.app.show_view(
                     OnboardingView, step=2, selected_types=saved
                 ),
+                active_override=saved,
             )
 
         for text, cmd in [
@@ -278,5 +279,7 @@ class OnboardingView(ctk.CTkFrame):
 
     def _generate(self):
         self.app.db.set_setting("active_media_types", ",".join(self.selected_types))
+        from generator import generate_recommendations
+        generate_recommendations(self.app.db, self.app.client)
         from views.home import HomeView
         self.app.show_view(HomeView)

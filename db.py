@@ -148,6 +148,11 @@ class Database:
         cursor.execute('''
         SELECT tag FROM blacklisted_tags WHERE media_type = ? OR media_type ='both' ''', (media_type,))
         return {row[0] for row in cursor.fetchall()}
+    # return all blackisted tags with their media for gui
+    def get_all_blacklisted_tags(self) -> list[dict]:
+        cursor = self.con.cursor()
+        cursor.execute("SELECT tag, media_type FROM blacklisted_tags ORDER BY tag")
+        return [{"tag": row[0], "media_type": row[1]} for row in cursor.fetchall()]
 
     def save_recommendation(self, item_dict):
         cursor = self.con.cursor()
@@ -182,6 +187,16 @@ class Database:
         cursor = self.con.cursor()
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
+
+    def get_recommendation_tags(self, mal_id, media_type) -> list[str]:
+        cursor = self.con.cursor()
+        cursor.execute('''
+                       SELECT tag
+                       FROM recommendation_tags
+                       WHERE mal_id = ?
+                         AND media_type = ?
+                       ''', (mal_id, media_type))
+        return [row[0] for row in cursor.fetchall()]
 
     def move_recommendation_to_saved(self, mal_id, media_type):
         cursor = self.con.cursor()

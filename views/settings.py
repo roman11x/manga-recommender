@@ -3,7 +3,7 @@ import customtkinter as ctk
 import theme
 
 
-FAKE_BLACKLISTED_TAGS = ["Hentai", "Boys Love"]
+
 
 
 class SettingsView(ctk.CTkFrame):
@@ -11,6 +11,7 @@ class SettingsView(ctk.CTkFrame):
         super().__init__(app, fg_color=theme.BG)
         self.app = app
         self.back_to = kwargs.get("back_to", None)
+        self._active_override = kwargs.get("active_override", None)
         self._build_ui()
 
     def _go_back(self):
@@ -122,28 +123,57 @@ class SettingsView(ctk.CTkFrame):
             text_color=theme.TEXT, anchor="w",
         ).pack(fill="x", pady=(0, 10))
 
-        btn_row = ctk.CTkFrame(content, fg_color="transparent")
-        btn_row.pack(fill="x")
-        for label, color in [("Manga", theme.ACCENT), ("Anime", theme.MAUVE)]:
-            ctk.CTkButton(
-                btn_row, text=f"{label} recommendations",
-                height=44, corner_radius=theme.R_MD,
-                fg_color="transparent",
-                border_width=1, border_color=color,
-                text_color=color,
-                hover_color=theme.SURFACE0,
-                font=ctk.CTkFont(size=14),
-                command=lambda t=label: print(f"[SettingsView] Toggle {t}"),
-            ).pack(side="left", padx=(0, 12))
+        active = self._active_override if self._active_override is not None else self.app.db.get_active_media_types()
+        inactive = [t for t in ["manga", "anime"] if t not in active]
+
+        if not inactive:
+            ctk.CTkLabel(
+                content, text="All media types are active.",
+                text_color=theme.MUTED, font=ctk.CTkFont(size=13),
+            ).pack(anchor="w")
+        else:
+            btn_row = ctk.CTkFrame(content, fg_color="transparent")
+            btn_row.pack(fill="x")
+            for media_type in inactive:
+                color = theme.ACCENT if media_type == "manga" else theme.MAUVE
+                ctk.CTkButton(
+                    btn_row, text=f"Enable {media_type} recommendations",
+                    height=44, corner_radius=theme.R_MD,
+                    fg_color="transparent",
+                    border_width=1, border_color=color,
+                    text_color=color,
+                    hover_color=theme.SURFACE0,
+                    font=ctk.CTkFont(size=14),
+                    command=lambda t=media_type: self._enable_type(t),
+                ).pack(side="left", padx=(0, 12))
+
+    def _enable_type(self, media_type):
+        from views.onboarding import OnboardingView
+        active = self.app.db.get_active_media_types()
+        if media_type not in active:
+            active.append(media_type)
+        self.app.db.set_setting("active_media_types", ",".join(active))
+        self.app.show_view(
+            OnboardingView,
+            step=2,
+            selected_types=active,
+        )
 
     def _render_tags(self):
         for w in self._tags_scroll.winfo_children():
             w.destroy()
-        for tag in FAKE_BLACKLISTED_TAGS:
+        tags = self.app.db.get_all_blacklisted_tags()
+        if not tags:
+            ctk.CTkLabel(
+                self._tags_scroll, text="No blacklisted tags.",
+                text_color=theme.MUTED, font=ctk.CTkFont(size=13),
+            ).pack(pady=8)
+            return
+        for entry in tags:
             row = ctk.CTkFrame(self._tags_scroll, fg_color="transparent")
             row.pack(fill="x", pady=2)
             ctk.CTkLabel(
-                row, text=tag,
+                row, text=f"{entry['tag']}  —  {entry['media_type']}",
                 text_color=theme.TEXT,
                 font=ctk.CTkFont(size=13), anchor="w",
             ).pack(side="left", padx=10, pady=6)
@@ -155,10 +185,18 @@ class SettingsView(ctk.CTkFrame):
                 text_color=theme.RED,
                 hover_color="#3d1f25",
                 font=ctk.CTkFont(size=12),
-                command=lambda t=tag: print(f"[SettingsView] Remove '{t}'"),
+                command=lambda e=entry: self._remove_tag(e["tag"], e["media_type"]),
             ).pack(side="right", padx=8)
 
     def _add_tag(self):
         tag = self._tag_entry.get().strip()
+        if not tag:
+            return
         media = self._tag_type_menu.get()
-        print(f"[SettingsView] Add tag '{tag}' for {media}")
+        self.app.db.add_blacklisted_tag(tag, media)
+        self._tag_entry.delete(0, "end")
+        self._render_tags()
+
+    def _remove_tag(self, tag, media_type):
+        self.app.db.remove_blacklisted_tag(tag, media_type)
+        self._render_tags()
