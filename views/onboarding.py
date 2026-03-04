@@ -283,16 +283,19 @@ class OnboardingView(ctk.CTkFrame):
         import threading
         from generator import generate_recommendations
         def run():
-
             try:
-                generate_recommendations(self.app.db, self.app.client)
-                print("[GEN] done, scheduling transition")
-                self.app.after(0, self._on_generation_done)
+                result = generate_recommendations(self.app.db, self.app.client)
+                if result == "network_error":
+                    self.app.after(0, lambda: self._on_generation_error(
+                        "No internet connection. Check your connection and try again."))
+                else:
+                    print("[GEN] done, scheduling transition")
+                    self.app.after(0, self._on_generation_done)
             except Exception as e:
                 print(f"[GEN] error: {e}")
                 import traceback
                 traceback.print_exc()
-                self.app.after(0, self._on_generation_done)
+                self.app.after(0, lambda: self._on_generation_error("Something went wrong. Please try again."))
 
         t = threading.Thread(target=run, daemon=True)
         t.start()
@@ -318,3 +321,28 @@ class OnboardingView(ctk.CTkFrame):
         print("[GEN] transitioning to HomeView")
         from views.home import HomeView
         self.app.show_view(HomeView)
+
+    def _on_generation_error(self, message):
+        self._clear()
+        center = ctk.CTkFrame(self, fg_color="transparent")
+        center.pack(fill="both", expand=True)
+        ctk.CTkLabel(
+            center, text="Could not generate recommendations",
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color=theme.RED,
+        ).place(relx=0.5, rely=0.42, anchor="center")
+        ctk.CTkLabel(
+            center, text=message,
+            font=ctk.CTkFont(size=14),
+            text_color=theme.MUTED,
+        ).place(relx=0.5, rely=0.50, anchor="center")
+        ctk.CTkButton(
+            center, text="Try Again",
+            width=160, height=44,
+            corner_radius=theme.R_MD,
+            fg_color=theme.ACCENT,
+            hover_color="#6a9fd8",
+            text_color=theme.BG,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=lambda: self.app.show_view(OnboardingView, step=2, selected_types=self.selected_types),
+        ).place(relx=0.5, rely=0.60, anchor="center")

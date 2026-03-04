@@ -13,18 +13,17 @@ GENRE_IDS = {
 def get_genre_ids_for_tags(tags: list[str]) -> list[int]:
     return [GENRE_IDS[t] for t in tags if t in GENRE_IDS]
 
-def generate_recommendations(db, client):
+def generate_recommendations(db, client) -> str:
     active_types = db.get_active_media_types()
     if not active_types:
         active_types = list({e["media_type"] for e in db.get_all_media()})
     print(f"[GEN] active_types: {active_types}")
-
+    network_ok = False
     for media_type in active_types:
         tag_weights = db.get_tag_weights(media_type)
         print(f"[GEN] tag_weights for {media_type}: {tag_weights}")
         if not tag_weights:
             continue
-
         top_tags = sorted(tag_weights, key=tag_weights.get, reverse=True)[:5]
         genre_ids = get_genre_ids_for_tags(top_tags)
         print(f"[GEN] top_tags: {top_tags}")
@@ -41,6 +40,9 @@ def generate_recommendations(db, client):
         for genre_id in genre_ids:
             for page in range(1, 3):
                 page_results = client.get_by_genres(media_type, [genre_id], page=page)
+                if page_results is None: #network error
+                    break;
+                network_ok = True #got a real response
                 print(f"[GEN] genre {genre_id} page {page}: {len(page_results) if page_results else 0} results")
                 if not page_results:
                     break
@@ -66,3 +68,4 @@ def generate_recommendations(db, client):
         for item in scored[:20]:
             tag_dicts = [{"name": t, "matched": 1 if t in tag_weights else 0} for t in item["tags"]]
             db.save_recommendation({**item, "tags": tag_dicts})
+    return "ok" if network_ok else "network_error"

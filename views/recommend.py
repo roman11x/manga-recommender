@@ -92,14 +92,34 @@ class RecommendView(ctk.CTkFrame):
         self._build_card(rec)
 
     def _show_empty(self):
-        empty = ctk.CTkFrame(self, fg_color="transparent")
-        empty.pack(fill="both", expand=True)
+        for w in self._content.winfo_children():
+            w.destroy()
         ctk.CTkLabel(
             self._content,
-            text="No recommendations left.",
-            font=ctk.CTkFont(size=16),
+            text="You're all caught up.",
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color=theme.TEXT,
+        ).place(relx=0.5, rely=0.38, anchor="center")
+        ctk.CTkLabel(
+            self._content,
+            text="Add more titles to your library to improve future recommendations.",
+            font=ctk.CTkFont(size=14),
             text_color=theme.MUTED,
-        ).place(relx=0.5, rely=0.5, anchor="center")
+        ).place(relx=0.5, rely=0.46, anchor="center")
+        ctk.CTkButton(
+            self._content, text="+ Add Titles",
+            width=160, height=44,
+            corner_radius=theme.R_MD,
+            fg_color=theme.ACCENT,
+            hover_color="#6a9fd8",
+            text_color=theme.BG,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._go_add,
+        ).place(relx=0.5, rely=0.56, anchor="center")
+
+    def _go_add(self):
+        from views.add import AddView
+        self.app.show_view(AddView)
 
     def _build_card(self, rec):
         card = ctk.CTkFrame(
