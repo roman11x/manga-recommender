@@ -23,9 +23,8 @@ A desktop application that recommends manga and anime based on your personal tas
 
 ## Screenshots
 
-<!-- Screenshot: Onboarding -->
-![Onboarding](screenshots/Initial_Screen.jpeg)
-![Onboarding](screenshots/Initial_Generation.jpeg)
+
+
 
 <!-- Screenshot: Recommendation card -->
 ![Recommendation Card](screenshots/recommandation.jpeg)
@@ -115,7 +114,8 @@ sudo apt install python3-tk
 On first launch you will see the onboarding screen. Choose whether you want manga, anime, or both, then add at least one title you have consumed and liked. Once you hit **Generate**, the app fetches recommendations and takes you to the home screen.
 
 <!-- Screenshot: Generate button active -->
-![Generate]()
+![Generate](screenshots/Initial_Screen.jpeg)
+![Generate](screenshots/Initial_Generation.jpeg)
 
 ---
 
