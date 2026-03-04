@@ -269,5 +269,5 @@ class RecommendView(ctk.CTkFrame):
                 photo = ctk.CTkImage(light_image=img, dark_image=img, size=(160, 220))
                 self.after(0, lambda: self._cover_label.configure(image=photo, text=""))
             except Exception:
-                print(f"[IMAGE] failed: {e}")
+
         threading.Thread(target=_fetch, daemon=True).start()

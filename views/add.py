@@ -243,7 +243,7 @@ class AddView(ctk.CTkFrame):
             hover_color="#3d1f25",
             command=self._remove_from_library,
         )
-        print(f"[AddView] Added '{r['title']}' status={status} liked={liked}")
+
 
     def _remove_from_library(self):
             r = self._current_result
