@@ -9,6 +9,7 @@ class Database:
     def setup(self):
         with self.con as conn:
             conn.executescript("""
+            PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS media(
             mal_id INTEGER NOT NULL,
             media_type TEXT NOT NULL,
@@ -52,6 +53,11 @@ class Database:
                 CREATE TABLE IF NOT EXISTS settings(
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS idx_media_type   ON media(media_type);
+            CREATE INDEX IF NOT EXISTS idx_media_status ON media(status);
+            CREATE INDEX IF NOT EXISTS idx_recs_state   ON recommendations(state, media_type);
+            CREATE INDEX IF NOT EXISTS idx_tags_media   ON tags(mal_id, media_type);
+            CREATE INDEX IF NOT EXISTS idx_rec_tags     ON recommendation_tags(mal_id, media_type);
             """)
     def add_media(self,mal_id,media_type,title,status, tags, liked=None):
         cursor = self.con.cursor()
@@ -75,6 +81,7 @@ class Database:
         if media_type is not None:
             query += " AND media_type = ?"
             params.append(media_type)
+        query += " ORDER BY added_at DESC"
         cursor = self.con.cursor()
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
@@ -134,7 +141,7 @@ class Database:
     def add_blacklisted_tag(self,tag,media_type):
         cursor = self.con.cursor()
         cursor.execute('''
-        INSERT INTO blacklisted_tags(tag,media_type) values (?,?)''', (tag,media_type))
+        INSERT OR IGNORE INTO blacklisted_tags(tag,media_type) values (?,?)''', (tag,media_type))
         self.con.commit()
 
     def remove_blacklisted_tag(self,tag,media_type):
@@ -174,6 +181,7 @@ class Database:
         if media_type is not None:
             query += " AND media_type = ?"
             params.append(media_type)
+        query += " ORDER BY score DESC"
         cursor = self.con.cursor()
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
@@ -184,6 +192,7 @@ class Database:
         if media_type is not None:
             query += " AND media_type = ?"
             params.append(media_type)
+        query += " ORDER BY generated_at DESC"
         cursor = self.con.cursor()
         cursor.execute(query, params)
         return [dict(row) for row in cursor.fetchall()]
@@ -213,7 +222,11 @@ class Database:
     def clear_pending_recommendations(self, media_type):
         cursor = self.con.cursor()
         cursor.execute('''
-        DELETE FROM recommendations WHERE state = 'pending' AND media_type = ?  ''', (media_type,))
+        DELETE FROM recommendation_tags WHERE media_type = ? AND mal_id IN (
+            SELECT mal_id FROM recommendations WHERE state = 'pending' AND media_type = ?
+        )''', (media_type, media_type))
+        cursor.execute('''
+        DELETE FROM recommendations WHERE state = 'pending' AND media_type = ?''', (media_type,))
         self.con.commit()
 
     def get_setting(self, key) -> str | None:

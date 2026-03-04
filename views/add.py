@@ -1,12 +1,9 @@
 # AddView; search and add manga/anime manually
+import threading
 import customtkinter as ctk
 import theme
 from api import extract_tags
 from utils import tag_pill
-
-
-
-
 
 
 class AddView(ctk.CTkFrame):
@@ -14,6 +11,7 @@ class AddView(ctk.CTkFrame):
         super().__init__(app, fg_color=theme.BG)
         self.app = app
         self.back_to = kwargs.get("back_to", None)
+        self._current_query = None  # tracks the latest search to discard stale results
         self._build_ui()
 
     def _go_back(self):
@@ -50,6 +48,7 @@ class AddView(ctk.CTkFrame):
             unselected_color=theme.SURFACE0,
             text_color=theme.TEXT,
             font=ctk.CTkFont(size=13),
+            command=self._on_type_change,
         )
         self._type_seg.set("Manga")
         self._type_seg.pack(side="right", padx=16)
@@ -86,17 +85,40 @@ class AddView(ctk.CTkFrame):
         self._result_frame = ctk.CTkFrame(self, fg_color="transparent")
         self._result_frame.pack(fill="both", expand=True, padx=20, pady=(0, 8))
 
-    def _do_search(self):
+    def _on_type_change(self, _):
+        """Switching type invalidates any in-flight search and clears the result."""
+        self._current_query = None
         for w in self._result_frame.winfo_children():
             w.destroy()
 
+    def _do_search(self):
         query = self._search_entry.get().strip()
         if not query:
             return
 
-        media_type = self._type_seg.get().lower()  # "Manga" → "manga"
+        self._current_query = query
+        media_type = self._type_seg.get().lower()
 
-        result = self.app.client.search_media(media_type, query)
+        for w in self._result_frame.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            self._result_frame, text="Searching...",
+            text_color=theme.MUTED, font=ctk.CTkFont(size=14),
+        ).pack(pady=20)
+
+        def fetch():
+            result = self.app.client.search_media(media_type, query)
+            self.after(0, lambda: self._on_search_result(result, query, media_type))
+
+        threading.Thread(target=fetch, daemon=True).start()
+
+    def _on_search_result(self, result, query, media_type):
+        if query != self._current_query:
+            return  # Superseded by a newer search or type change
+
+        for w in self._result_frame.winfo_children():
+            w.destroy()
+
         if result is None:
             ctk.CTkLabel(
                 self._result_frame, text="No results found.",
@@ -104,15 +126,14 @@ class AddView(ctk.CTkFrame):
             ).pack(pady=20)
             return
 
-        # Extract what we need
         self._current_result = {
-            "mal_id": result["mal_id"],
+            "mal_id":     result["mal_id"],
             "media_type": media_type,
-            "title": result["title"],
-            "cover_url": result["images"]["jpg"]["large_image_url"],
-            "synopsis": result.get("synopsis"),
-            "tags": extract_tags(result),
-            "mal_score": result.get("score"),
+            "title":      result["title"],
+            "cover_url":  (result.get("images") or {}).get("jpg", {}).get("large_image_url"),
+            "synopsis":   result.get("synopsis"),
+            "tags":       extract_tags(result),
+            "mal_score":  result.get("score"),
         }
         self._show_result()
 
@@ -169,10 +190,11 @@ class AddView(ctk.CTkFrame):
         self._status_var = ctk.StringVar(value="consumed")
         radio_row = ctk.CTkFrame(inner, fg_color="transparent")
         radio_row.pack(fill="x", pady=(0, 8))
+        plan_label = "Plan to Watch" if r["media_type"] == "anime" else "Plan to Read"
         for label, value in [
             ("Completed", "consumed"),
             ("In Progress", "consuming"),
-            ("Plan to Read", "plan_to_consume"),
+            (plan_label, "plan_to_consume"),
         ]:
             ctk.CTkRadioButton(
                 radio_row, text=label,
@@ -187,7 +209,6 @@ class AddView(ctk.CTkFrame):
         # Liked row — only visible when Completed is selected
         self._liked_var = ctk.StringVar(value="1")
         self._liked_row = ctk.CTkFrame(inner, fg_color="transparent")
-        # pack it now — _on_status_change will hide it if needed
         self._liked_row.pack(fill="x", pady=(0, 12))
         ctk.CTkLabel(
             self._liked_row, text="Did you like it?",
@@ -225,15 +246,21 @@ class AddView(ctk.CTkFrame):
         status = self._status_var.get()
         liked = int(self._liked_var.get()) if status == "consumed" else None
 
-        self.app.db.add_media(
-            mal_id=r["mal_id"],
-            media_type=r["media_type"],
-            title=r["title"],
-            status=status,
-            tags=r["tags"],
-            liked=liked,
-        )
-        self._added = True
+        existing = self.app.db.get_media(r["mal_id"], r["media_type"])
+        if existing:
+            self.app.db.update_status(r["mal_id"], r["media_type"], status)
+            if liked is not None:
+                self.app.db.update_liked(r["mal_id"], r["media_type"], liked)
+        else:
+            self.app.db.add_media(
+                mal_id=r["mal_id"],
+                media_type=r["media_type"],
+                title=r["title"],
+                status=status,
+                tags=r["tags"],
+                liked=liked,
+            )
+
         self._action_btn.configure(
             text="✓ Added — Remove from Library",
             fg_color="transparent",
@@ -244,16 +271,14 @@ class AddView(ctk.CTkFrame):
             command=self._remove_from_library,
         )
 
-
     def _remove_from_library(self):
-            r = self._current_result
-            self.app.db.delete_media(r["mal_id"], r["media_type"])
-            # reset button back
-            self._action_btn.configure(
-                text="Add to Library",
-                fg_color=theme.GREEN,
-                hover_color="#7dc987",
-                text_color=theme.BG,
-                border_width=0,
-                command=self._add_to_library,
-            )
+        r = self._current_result
+        self.app.db.delete_media(r["mal_id"], r["media_type"])
+        self._action_btn.configure(
+            text="Add to Library",
+            fg_color=theme.GREEN,
+            hover_color="#7dc987",
+            text_color=theme.BG,
+            border_width=0,
+            command=self._add_to_library,
+        )

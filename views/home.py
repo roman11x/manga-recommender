@@ -70,6 +70,17 @@ class HomeView(ctk.CTkFrame):
             s, text="Jikan / MAL  •  v0.1",
             font=ctk.CTkFont(size=11),
             text_color=theme.MUTED, anchor="w",
+        ).pack(anchor="w", pady=(0, 8))
+        ctk.CTkButton(
+            s, text="Quit",
+            width=90, height=30,
+            corner_radius=theme.R_SM,
+            fg_color="transparent",
+            border_width=1, border_color=theme.RED,
+            text_color=theme.RED,
+            hover_color="#3d1f25",
+            font=ctk.CTkFont(size=12),
+            command=self.app.destroy,
         ).pack(anchor="w", pady=(0, 28))
 
     # ── Nav cards ────────────────────────────────────────────────────────────

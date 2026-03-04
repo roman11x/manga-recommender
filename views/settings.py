@@ -1,9 +1,7 @@
 # SettingsView; tag blacklist and active media type toggles
+import threading
 import customtkinter as ctk
 import theme
-
-
-
 
 
 class SettingsView(ctk.CTkFrame):
@@ -12,6 +10,8 @@ class SettingsView(ctk.CTkFrame):
         self.app = app
         self.back_to = kwargs.get("back_to", None)
         self._active_override = kwargs.get("active_override", None)
+        self._genre_cache = {}   # {"manga": [name, ...], "anime": [name, ...]}
+        self._genre_names = []   # current valid names for validation
         self._build_ui()
 
     def _go_back(self):
@@ -72,17 +72,25 @@ class SettingsView(ctk.CTkFrame):
         # Add tag row
         add_row = ctk.CTkFrame(content, fg_color="transparent")
         add_row.pack(fill="x", pady=4)
-        self._tag_entry = ctk.CTkEntry(
-            add_row, placeholder_text="Tag name...",
+
+        self._tag_combobox = ctk.CTkComboBox(
+            add_row, values=["Loading genres..."],
             fg_color=theme.SURFACE0,
             border_color=theme.OVERLAY,
             text_color=theme.TEXT,
-            placeholder_text_color=theme.MUTED,
+            button_color=theme.SURFACE1,
+            button_hover_color=theme.OVERLAY,
+            dropdown_fg_color=theme.SURFACE0,
+            dropdown_hover_color=theme.SURFACE1,
+            dropdown_text_color=theme.TEXT,
             corner_radius=theme.R_MD,
-            height=38, width=200,
+            height=38, width=240,
             font=ctk.CTkFont(size=13),
+            state="disabled",
         )
-        self._tag_entry.pack(side="left", padx=(0, 8))
+        self._tag_combobox.set("Loading genres...")
+        self._tag_combobox.pack(side="left", padx=(0, 8))
+
         self._tag_type_menu = ctk.CTkOptionMenu(
             add_row, values=["manga", "anime", "both"],
             fg_color=theme.SURFACE0,
@@ -94,9 +102,14 @@ class SettingsView(ctk.CTkFrame):
             corner_radius=theme.R_MD,
             width=110, height=38,
             font=ctk.CTkFont(size=13),
+            command=self._on_type_change,
         )
-        self._tag_type_menu.set("both")
+        if self._active_override and len(self._active_override) == 1:
+            self._tag_type_menu.set(self._active_override[0])
+        else:
+            self._tag_type_menu.set("both")
         self._tag_type_menu.pack(side="left", padx=(0, 8))
+
         ctk.CTkButton(
             add_row, text="Add", width=80, height=38,
             corner_radius=theme.R_MD,
@@ -147,6 +160,59 @@ class SettingsView(ctk.CTkFrame):
                     command=lambda t=media_type: self._enable_type(t),
                 ).pack(side="left", padx=(0, 12))
 
+        # Kick off genre loading
+        self._load_genres()
+
+    # ── Genre loading ─────────────────────────────────────────────────────────
+
+    def _on_type_change(self, _=None):
+        self._load_genres()
+
+    def _load_genres(self):
+        media_type = self._tag_type_menu.get()
+
+        # Serve from cache when possible
+        if media_type == "both":
+            if "manga" in self._genre_cache and "anime" in self._genre_cache:
+                names = sorted(set(self._genre_cache["manga"]) | set(self._genre_cache["anime"]))
+                self._set_genres(names)
+                return
+        else:
+            if media_type in self._genre_cache:
+                self._set_genres(self._genre_cache[media_type])
+                return
+
+        self._tag_combobox.configure(state="disabled")
+        self._tag_combobox.set("Loading genres...")
+
+        def fetch():
+            try:
+                if media_type == "both":
+                    for t in [m for m in ("manga", "anime") if m not in self._genre_cache]:
+                        genres = self.app.client.get_genres(t) or {}
+                        self._genre_cache[t] = sorted(genres.keys())
+                    names = sorted(set(self._genre_cache.get("manga", [])) | set(self._genre_cache.get("anime", [])))
+                else:
+                    genres = self.app.client.get_genres(media_type) or {}
+                    self._genre_cache[media_type] = sorted(genres.keys())
+                    names = self._genre_cache[media_type]
+            except Exception:
+                names = []
+            self.after(0, lambda ns=names: self._set_genres(ns))
+
+        threading.Thread(target=fetch, daemon=True).start()
+
+    def _set_genres(self, names):
+        self._genre_names = names
+        if not names:
+            self._tag_combobox.configure(values=["(unavailable)"], state="disabled")
+            self._tag_combobox.set("(unavailable)")
+            return
+        self._tag_combobox.configure(values=names, state="normal")
+        self._tag_combobox.set(names[0])
+
+    # ── Tag management ────────────────────────────────────────────────────────
+
     def _enable_type(self, media_type):
         from views.onboarding import OnboardingView
         active = self.app.db.get_active_media_types()
@@ -189,12 +255,11 @@ class SettingsView(ctk.CTkFrame):
             ).pack(side="right", padx=8)
 
     def _add_tag(self):
-        tag = self._tag_entry.get().strip()
-        if not tag:
+        tag = self._tag_combobox.get().strip()
+        if not tag or tag not in self._genre_names:
             return
         media = self._tag_type_menu.get()
         self.app.db.add_blacklisted_tag(tag, media)
-        self._tag_entry.delete(0, "end")
         self._render_tags()
 
     def _remove_tag(self, tag, media_type):

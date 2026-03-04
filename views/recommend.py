@@ -267,7 +267,7 @@ class RecommendView(ctk.CTkFrame):
                 response = requests.get(url, timeout=5)
                 img = Image.open(BytesIO(response.content))
                 photo = ctk.CTkImage(light_image=img, dark_image=img, size=(160, 220))
-                self.after(0, lambda: self._cover_label.configure(image=photo, text=""))
+                self.after(0, lambda p=photo: self._cover_label.winfo_exists() and self._cover_label.configure(image=p, text=""))
             except Exception:
                 pass
 

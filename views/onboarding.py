@@ -289,10 +289,8 @@ class OnboardingView(ctk.CTkFrame):
                     self.app.after(0, lambda: self._on_generation_error(
                         "No internet connection. Check your connection and try again."))
                 else:
-                    print("[GEN] done, scheduling transition")
                     self.app.after(0, self._on_generation_done)
             except Exception as e:
-                print(f"[GEN] error: {e}")
                 import traceback
                 traceback.print_exc()
                 self.app.after(0, lambda: self._on_generation_error("Something went wrong. Please try again."))
@@ -318,7 +316,6 @@ class OnboardingView(ctk.CTkFrame):
         ).place(relx=0.5, rely=0.52, anchor="center")
 
     def _on_generation_done(self):
-        print("[GEN] transitioning to HomeView")
         from views.home import HomeView
         self.app.show_view(HomeView)
 

@@ -52,7 +52,7 @@ def generate_recommendations(db, client) -> str:
                         "mal_id":     item["mal_id"],
                         "media_type": media_type,
                         "title":      item["title"],
-                        "cover_url":  item["images"]["jpg"]["large_image_url"],
+                        "cover_url":  (item.get("images") or {}).get("jpg", {}).get("large_image_url"),
                         "synopsis":   item.get("synopsis"),
                         "mal_score":  item.get("score"),
                         "tags":       extract_tags(item),
